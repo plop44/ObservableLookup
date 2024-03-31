@@ -49,7 +49,7 @@ public class ObservableLookup<TSource, TKey> : IDisposable where TKey : notnull
                 return subscriptions.Select(action => (action, values: values.AsObservable()));
             }))
             .Merge()
-            .Subscribe(t => { t.action.Invoke(t.values); });
+            .Subscribe(t => t.action.Invoke(t.values));
 
         _compositeDisposable.Add(subscription);
         _compositeDisposable.Add(inputConnectable.Connect());
@@ -65,7 +65,7 @@ public class ObservableLookup<TSource, TKey> : IDisposable where TKey : notnull
             return Observable.Create<TSource>(o =>
             {
                 var compositeDisposable = new CompositeDisposable();
-                _subscriptions.OnNext((key, t => { compositeDisposable.Add(t.Subscribe(o)); }));
+                _subscriptions.OnNext((key, t => compositeDisposable.Add(t.Subscribe(o))));
 
                 return compositeDisposable;
             });

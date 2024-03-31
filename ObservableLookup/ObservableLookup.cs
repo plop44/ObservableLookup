@@ -77,5 +77,5 @@ public class ObservableLookup<TSource, TKey> : IDisposable where TKey : notnull
         _compositeDisposable.Dispose();
     }
 
-    public record ValueOrAction(TKey Key, TSource? Value, Action<IObservable<TSource>>? Subscription, bool IsValue);
+    private record struct ValueOrAction(TKey Key, TSource? Value, Action<IObservable<TSource>>? Subscription, bool IsValue);
 }

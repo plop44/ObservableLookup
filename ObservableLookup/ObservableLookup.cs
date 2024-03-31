@@ -11,7 +11,7 @@ public static class ObservableLookupExtensions
         return new(input, keySelector);
     }
 
-    public static ObservableLookup<TSource, TKey> ToObservableLookupReplaying<TSource, TKey>(this IObservable<TSource> input, Func<TSource, TKey> keySelector) where TKey : notnull
+    public static ObservableLookup<TSource, TKey> ToObservableLookupReplayingLast<TSource, TKey>(this IObservable<TSource> input, Func<TSource, TKey> keySelector) where TKey : notnull
     {
         return new(input, keySelector, true);
     }

@@ -1,4 +1,5 @@
 using System.Reactive.Disposables;
+using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using Microsoft.Reactive.Testing;
 
@@ -6,6 +7,29 @@ namespace ObservableLookup.Tests;
 
 public class ObservableLookupTests
 {
+    [Test]
+    public void ReadMeCase1()
+    {
+        var observable = Enumerable.Range(0, 30).ToObservable().Publish();
+
+        var observableLookup = observable.ToObservableLookup(t => t % 10);
+        observableLookup[3].Materialize().Subscribe(Console.WriteLine);
+
+        observable.Connect();
+    }
+
+    [Test]
+    public void ReadMeCase2()
+    {
+        var observable = Enumerable.Range(0, 30).ToObservable().Merge(Observable.Never<int>()).Publish();
+
+        var observableLookup = observable.ToObservableLookupReplayingLast(t => t % 10);
+
+        observable.Connect();
+
+        observableLookup[3].Materialize().Subscribe(Console.WriteLine);
+    }
+
     [Test]
     public void WhenWeReceiveAMessage()
     {
@@ -111,7 +135,7 @@ public class ObservableLookupTests
         var testScheduler = new TestScheduler();
 
         var observableLookupReplayingLast = testScheduler.CreateHotObservable(ReactiveTest.OnNext(100, 1))
-            .ToObservableLookupReplaying(t => t % 4);
+            .ToObservableLookupReplayingLast(t => t % 4);
         
         // CreateHotObservable seems buggy, we need to call Start here, then later
         testScheduler.Start();
@@ -138,7 +162,7 @@ public class ObservableLookupTests
 
         var observableLookupReplayingLast = testScheduler.CreateHotObservable(ReactiveTest.OnNext(100, 1)
                 ,ReactiveTest.OnNext(200, 5))
-            .ToObservableLookupReplaying(t => t % 4);
+            .ToObservableLookupReplayingLast(t => t % 4);
 
         // CreateHotObservable seems buggy, we need to call Start here, then later
         testScheduler.Start();
@@ -208,7 +232,7 @@ public class ObservableLookupTests
         var testScheduler = new TestScheduler();
 
         var observableLookupReplayingLast = testScheduler.CreateHotObservable(ReactiveTest.OnCompleted<int>(400))
-            .ToObservableLookupReplaying(t => t % 4);
+            .ToObservableLookupReplayingLast(t => t % 4);
 
         var result = testScheduler.CreateObserver<int>();
         testScheduler.Schedule(TimeSpan.FromTicks(0), (_, _) =>
@@ -280,7 +304,7 @@ public class ObservableLookupTests
         var subject = new Subject<int>();
         var result = new List<int>();
 
-        var observableLookup = subject.ToObservableLookupReplaying(t => t % 10);
+        var observableLookup = subject.ToObservableLookupReplayingLast(t => t % 10);
 
         for (int i = 0; i < 10; i++)
         {
@@ -303,7 +327,7 @@ public class ObservableLookupTests
         var subject = new Subject<int>();
         var result = new List<int>();
 
-        var observableLookup = subject.ToObservableLookupReplaying(t => t % 10);
+        var observableLookup = subject.ToObservableLookupReplayingLast(t => t % 10);
 
         // ACT
         Enumerable.Range(0, 10_000)

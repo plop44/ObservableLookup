@@ -1,70 +1,81 @@
-﻿using System.Collections.Concurrent;
-using System.Reactive.Disposables;
+﻿using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 
-namespace ObservableLookup
+namespace ObservableLookup;
+
+public static class ObservableLookupExtensions
 {
-    public static class ObservableLookupExtensions
+    public static ObservableLookup<TSource, TKey> ToObservableLookup<TSource, TKey>(this IObservable<TSource> input, Func<TSource, TKey> keySelector) where TKey : notnull
     {
-        public static ObservableLookup<TKey, TElement> ToObservableLookup<TKey, TElement>(this IObservable<IGroupedObservable<TKey, TElement>> input) where TKey : notnull => new(input, _ => new Subject<TElement>());
-        public static ObservableLookup<TKey, TElement> ToObservableLookupReplayingLast<TKey, TElement>(this IObservable<IGroupedObservable<TKey, TElement>> input) where TKey : notnull => new(input, _ => new ReplaySubject<TElement>(1));
+        return new(input, keySelector);
     }
 
-    public class ObservableLookup<TKey, TElement> where TKey : notnull
+    public static ObservableLookup<TSource, TKey> ToObservableLookupReplaying<TSource, TKey>(this IObservable<TSource> input, Func<TSource, TKey> keySelector) where TKey : notnull
     {
-        private readonly IObservable<IGroupedObservable<TKey, TElement>> _input;
-        private readonly Func<TKey, ISubject<TElement>> _subjectFactory;
-        private readonly ConcurrentDictionary<TKey, ISubject<TElement>> _subjects = new();
-        private bool _disposed;
+        return new(input, keySelector, true);
+    }
+}
 
-        public ObservableLookup(IObservable<IGroupedObservable<TKey, TElement>> input, Func<TKey, ISubject<TElement>> subjectFactory)
-        {
-            _input = input;
-            _subjectFactory = subjectFactory;
-        }
+public class ObservableLookup<TSource, TKey> : IDisposable where TKey : notnull
+{
+    private readonly CompositeDisposable _compositeDisposable = new();
+    private readonly Subject<(TKey, Action<IObservable<TSource>>)> _subscriptions = new();
 
-        public IDisposable Connect()
-        {
-            var subscription = _input.Subscribe(OnNextGroup, onCompleted: OnComplete);
+    internal ObservableLookup(IObservable<TSource> input, Func<TSource, TKey> keySelector, bool isReplayingLast = false)
+    {
+        var inputConnectable = input.Publish();
+        var sourceModified = inputConnectable.Select(t => new ValueOrAction(keySelector(t), t, default, true));
+        var subscriptionsModified = _subscriptions.Select(t => new ValueOrAction(t.Item1, default, t.Item2, false));
 
-            return new CompositeDisposable(subscription, Disposable.Create(OnDispose));
-        }
+        var completeObservable = inputConnectable.StartWith(default(TSource)).LastAsync();
 
-        private void OnDispose()
-        {
-            if (_disposed) return;
-
-            _disposed = true;
-            foreach (var subject in _subjects.Values)
+        var subscription = sourceModified
+            .Merge(subscriptionsModified)
+            .TakeUntil(completeObservable)
+            .GroupBy(t => t.Key)
+            .Select(t => t.Publish(t2 =>
             {
-                subject.OnCompleted();
-                (subject as IDisposable)?.Dispose();
-            }
-        }
+                var subscriptions = t2.Where(t3 => !t3.IsValue).Select(t3 => t3.Subscription ?? throw new Exception("Expecting a Subscription"));
+                var values = t2.Where(t3 => t3.IsValue).Select(t3 => t3.Value!);
 
-        private void OnComplete()
+                if (isReplayingLast)
+                {
+                    var connectableObservable = values.Replay(1);
+                    values = connectableObservable;
+                    connectableObservable.Connect();
+                }
+
+                return subscriptions.Select(action => (action, values: values.AsObservable()));
+            }))
+            .Merge()
+            .Subscribe(t => { t.action.Invoke(t.values); });
+
+        _compositeDisposable.Add(subscription);
+        _compositeDisposable.Add(inputConnectable.Connect());
+    }
+
+    public IObservable<TSource> this[TKey key]
+    {
+        get
         {
-            foreach (var subject in _subjects.Values)
+            if (_compositeDisposable.IsDisposed)
+                return Observable.Empty<TSource>();
+
+            return Observable.Create<TSource>(o =>
             {
-                subject.OnCompleted();
-            }
-        }
+                var compositeDisposable = new CompositeDisposable();
+                _subscriptions.OnNext((key, t => { compositeDisposable.Add(t.Subscribe(o)); }));
 
-        private void OnNextGroup(IGroupedObservable<TKey, TElement> element)
-        {
-            element.Subscribe(_subjects.GetOrAdd(element.Key, t => _subjectFactory.Invoke(t)));
-        }
-
-        public IObservable<TElement> this[TKey key]
-        {
-            get
-            {
-                if (_disposed)
-                    throw new ObjectDisposedException("This is disposed");
-
-                return _subjects.GetOrAdd(key, t => _subjectFactory.Invoke(t));
-            }
+                return compositeDisposable;
+            });
         }
     }
+
+    public void Dispose()
+    {
+        _compositeDisposable.Dispose();
+    }
+
+    public record ValueOrAction(TKey Key, TSource? Value, Action<IObservable<TSource>>? Subscription, bool IsValue);
 }

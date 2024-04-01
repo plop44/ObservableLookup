@@ -28,11 +28,10 @@ public class ObservableLookup<TSource, TKey> : IDisposable where TKey : notnull
         var sourceModified = inputConnectable.Select(t => new ValueOrAction(keySelector(t), t, default, true));
         var subscriptionsModified = _subscriptions.Select(t => new ValueOrAction(t.Item1, default, t.Item2, false));
 
-        var completeObservable = inputConnectable.StartWith(default(TSource)).LastAsync();
+        var completeObservable = inputConnectable.LastOrDefaultAsync();
 
         var subscription = sourceModified
             .Merge(subscriptionsModified)
-            .TakeUntil(completeObservable)
             .GroupBy(t => t.Key)
             .Select(t => t.Publish(t2 =>
             {
@@ -46,10 +45,10 @@ public class ObservableLookup<TSource, TKey> : IDisposable where TKey : notnull
                     connectableObservable.Connect();
                 }
 
-                return subscriptions.Select(action => (action, values: values.AsObservable()));
+                return subscriptions.Select(action => (action, values));
             }))
             .Merge()
-            .Subscribe(t => t.action.Invoke(t.values));
+            .Subscribe(t => t.action.Invoke(t.values.TakeUntil(completeObservable)));
 
         _compositeDisposable.Add(subscription);
         _compositeDisposable.Add(inputConnectable.Connect());

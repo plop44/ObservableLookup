@@ -1,7 +1,5 @@
-using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
-using Microsoft.Reactive.Testing;
 
 namespace ObservableLookup.Tests;
 
@@ -31,247 +29,233 @@ public class ObservableLookupTests
     }
 
     [Test]
-    public void WhenWeReceiveAMessage()
+    public void WhenSubscribeThenOnNext()
     {
-        var testScheduler = new TestScheduler();
-
-        var observableLookup = testScheduler.CreateHotObservable(ReactiveTest.OnNext(100, 1))
-            .ToObservableLookup(t => t % 4);
-
-        var result = testScheduler.CreateObserver<int>();
-
-        testScheduler.Schedule(TimeSpan.FromTicks(0), (_, _) =>
-        {
-            observableLookup[1].Subscribe(result);
-            return Disposable.Empty;
-        });
-
-        // ACT
-        testScheduler.Start();
-
-        // ASSERT
-        ReactiveAssert.AreElementsEqual(new[] { ReactiveTest.OnNext(100, 1) }, result.Messages);
+        var result = new List<int>();
+        var subject = new Subject<int>();
+        subject.ToObservableLookup(t => t % 4)[1].Subscribe(result.Add);
+        subject.OnNext(1);
+        Assert.That(result, Is.EqualTo(new[] { 1 }));
     }
 
     [Test]
-    public void WhenWeReceiveAMessageButWeSubscribeToAnotherKey()
+    public void WhenSubscribeThenOnNextButForWrongKey()
     {
-        var testScheduler = new TestScheduler();
-
-        var observableLookup = testScheduler.CreateHotObservable(ReactiveTest.OnNext(100, 1))
-            .ToObservableLookup(t => t % 4);
-        var result = testScheduler.CreateObserver<int>();
-
-        testScheduler.Schedule(TimeSpan.FromTicks(0), (_, _) =>
-        {
-            observableLookup[3].Subscribe(result);
-            return Disposable.Empty;
-        });
-
-        // ACT
-        testScheduler.Start();
-
-        // ASSERT
-        CollectionAssert.IsEmpty(result.Messages);
+        var result = new List<int>();
+        var subject = new Subject<int>();
+        subject.ToObservableLookup(t => t % 4)[2].Subscribe(result.Add);
+        subject.OnNext(1);
+        Assert.That(result, Is.Empty);
     }
 
     [Test]
-    public void WhenWeReceiveAMessageButWeDisposedSubscription()
+    public void WhenSubscribeThenOnNextButWeDisposedSubscription()
     {
-        var testScheduler = new TestScheduler();
-
-        var observableLookup = testScheduler.CreateHotObservable(ReactiveTest.OnNext(100, 1))
-            .ToObservableLookup(t => t % 4);
-        var result = testScheduler.CreateObserver<int>();
-
-        testScheduler.Schedule(TimeSpan.FromTicks(0), (_, _) =>
-        {
-            observableLookup[1].Subscribe(result);
-            return Disposable.Empty;
-        });
-
-        testScheduler.Schedule(TimeSpan.FromTicks(50), (_, _) =>
-        {
-            observableLookup.Dispose();
-            return Disposable.Empty;
-        });
-
-        // ACT
-        testScheduler.Start();
-
-        // ASSERT
-        CollectionAssert.IsEmpty(result.Messages);
+        var result = new List<int>();
+        var subject = new Subject<int>();
+        subject.ToObservableLookup(t => t % 4)[1].Subscribe(result.Add).Dispose();
+        subject.OnNext(1);
+        Assert.That(result, Is.Empty);
     }
 
     [Test]
-    public void WhenWeReceiveAMessageButWeSubscribedAfterElementArrived()
+    public void WhenSubscribeThenOnNextButWeDisposedObservableLookup()
     {
-        var testScheduler = new TestScheduler();
-
-        var observableLookup = testScheduler.CreateHotObservable(ReactiveTest.OnNext(100, 1))
-            .ToObservableLookup(t => t % 4);
-
-        // CreateHotObservable seems buggy, we need to call Start here, then later
-        testScheduler.Start();
-
-        var result = testScheduler.CreateObserver<int>();
-
-        testScheduler.Schedule(TimeSpan.FromTicks(350), (_, _) =>
-        {
-            observableLookup[1].Subscribe(result);
-            return Disposable.Empty;
-        });
-
-        // ACT
-        testScheduler.Start();
-
-        // ASSERT
-        CollectionAssert.IsEmpty(result.Messages);
+        var result = new List<int>();
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookup(t => t % 4);
+        observableLookup[1].Subscribe(result.Add);
+        observableLookup.Dispose();
+        subject.OnNext(1);
+        Assert.That(result, Is.Empty);
     }
 
     [Test]
-    public void WhenWeReceiveAMessageButWeSubscribedAfterElementArrivedButWeUseReplay()
+    public void WhenOnNextThenSubscribe()
     {
-        var testScheduler = new TestScheduler();
-
-        var observableLookupReplayingLast = testScheduler.CreateHotObservable(ReactiveTest.OnNext(100, 1))
-            .ToObservableLookupReplayingLast(t => t % 4);
-        
-        // CreateHotObservable seems buggy, we need to call Start here, then later
-        testScheduler.Start();
-
-        var result = testScheduler.CreateObserver<int>();
-
-        testScheduler.Schedule(TimeSpan.FromTicks(350), (_, _) =>
-        {
-            observableLookupReplayingLast[1].Subscribe(result);
-            return Disposable.Empty;
-        });
-
-        // ACT
-        testScheduler.Start();
-
-        // ASSERT
-        ReactiveAssert.AreElementsEqual(new[] { ReactiveTest.OnNext(101, 1) }, result.Messages);
+        var result = new List<int>();
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookup(t => t % 4);
+        subject.OnNext(1);
+        observableLookup[1].Subscribe(result.Add);
+        Assert.That(result, Is.Empty);
     }
 
     [Test]
-    public void WhenWeReceiveAMessageButWeSubscribedAfterElementArrivedButWeUseReplay2()
+    public void WhenOnNextThenSubscribeWhileReplayingLast()
     {
-        var testScheduler = new TestScheduler();
-
-        var observableLookupReplayingLast = testScheduler.CreateHotObservable(ReactiveTest.OnNext(100, 1)
-                ,ReactiveTest.OnNext(200, 5))
-            .ToObservableLookupReplayingLast(t => t % 4);
-
-        // CreateHotObservable seems buggy, we need to call Start here, then later
-        testScheduler.Start();
-
-        var result = testScheduler.CreateObserver<int>();
-
-        testScheduler.Schedule(TimeSpan.FromTicks(350), (_, _) =>
-        {
-            observableLookupReplayingLast[1].Subscribe(result);
-            return Disposable.Empty;
-        });
-
-        // ACT
-        testScheduler.Start();
-
-        // ASSERT
-        ReactiveAssert.AreElementsEqual(new[] { ReactiveTest.OnNext(201, 5) }, result.Messages);
+        var result = new List<int>();
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookupReplayingLast(t => t % 4);
+        subject.OnNext(1);
+        observableLookup[1].Subscribe(result.Add);
+        Assert.That(result, Is.EqualTo(new[] { 1 }));
     }
 
     [Test]
-    public void WhenWeComplete()
+    public void WhenMultipleOnNextThenSubscribeWhileReplayingLast()
     {
-        var testScheduler = new TestScheduler();
-
-        var observableLookup = testScheduler.CreateHotObservable(ReactiveTest.OnCompleted<int>(400))
-            .ToObservableLookup(t => t % 4);
-        
-        var result = testScheduler.CreateObserver<int>();
-        testScheduler.Schedule(TimeSpan.FromTicks(0), (_, _) =>
-        {
-            observableLookup[1].Subscribe(result);
-            return Disposable.Empty;
-        });
-
-        // ACT
-        testScheduler.Start();
-
-        // ASSERT
-        ReactiveAssert.AreElementsEqual(new[] { ReactiveTest.OnCompleted<int>(400) }, result.Messages);
+        var result = new List<int>();
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookupReplayingLast(t => t % 4);
+        subject.OnNext(1);
+        subject.OnNext(5);
+        observableLookup[1].Subscribe(result.Add);
+        Assert.That(result, Is.EqualTo(new[] { 5 }));
     }
 
     [Test]
-    public void WhenWeCompleteThenWeSubscribe()
+    public void CompleteShouldPropagate()
     {
-        var testScheduler = new TestScheduler();
+        bool isCompleted = false;
 
-        var observableLookup = testScheduler.CreateHotObservable(ReactiveTest.OnCompleted<int>(400))
-            .ToObservableLookup(t => t % 4);
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookup(t => t % 4);
+        observableLookup[1].Subscribe(_ => { }, () => isCompleted = true);
+        subject.OnCompleted();
 
-        var result = testScheduler.CreateObserver<int>();
-        testScheduler.Schedule(TimeSpan.FromTicks(600), (_, _) =>
-        {
-            observableLookup[1].Subscribe(result);
-            return Disposable.Empty;
-        });
-
-        // ACT
-        testScheduler.Start();
-
-        // ASSERT
-        ReactiveAssert.AreElementsEqual(new[] { ReactiveTest.OnCompleted<int>(400) }, result.Messages);
+        Assert.That(isCompleted, Is.True);
     }
 
     [Test]
-    public void WhenWeCompleteWhileReplayingLast()
+    public void CompleteShouldPropagateEvenWhenSubscribingAfter()
     {
-        var testScheduler = new TestScheduler();
+        bool isCompleted = false;
 
-        var observableLookupReplayingLast = testScheduler.CreateHotObservable(ReactiveTest.OnCompleted<int>(400))
-            .ToObservableLookupReplayingLast(t => t % 4);
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookup(t => t % 4);
+        subject.OnCompleted();
+        observableLookup[1].Subscribe(_ => { }, () => isCompleted = true);
 
-        var result = testScheduler.CreateObserver<int>();
-        testScheduler.Schedule(TimeSpan.FromTicks(0), (_, _) =>
-        {
-            observableLookupReplayingLast[1].Subscribe(result);
-            return Disposable.Empty;
-        });
+        Assert.That(isCompleted, Is.True);
+    }
 
-        // ACT
-        testScheduler.Start();
+    [Test]
+    public void CompleteShouldPropagateWhileReplayingLast()
+    {
+        bool isCompleted = false;
+
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookupReplayingLast(t => t % 4);
+        observableLookup[1].Subscribe(_ => { }, () => isCompleted = true);
+        subject.OnCompleted();
+
+        Assert.That(isCompleted, Is.True);
+    }
+
+    [Test]
+    public void CompleteShouldPropagateEvenWhenSubscribingAfterWhileReplayingLast()
+    {
+        bool isCompleted = false;
+
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookupReplayingLast(t => t % 4);
+        subject.OnCompleted();
+        observableLookup[1].Subscribe(_ => { }, () => isCompleted = true);
+
+        Assert.That(isCompleted, Is.True);
+    }
+
+    [Test]
+    public void WhenOnNextThenCompleteThenSubscribe()
+    {
+        var result = new List<int>();
+        bool isCompleted = false;
+
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookup(t => t % 4);
+        subject.OnNext(1);
+        subject.OnCompleted();
+
+        observableLookup[1].Subscribe(result.Add, () => isCompleted = true);
 
         // ASSERT
-        ReactiveAssert.AreElementsEqual(new[] { ReactiveTest.OnCompleted<int>(400) }, result.Messages);
+        Assert.That(result, Is.Empty);
+        Assert.That(isCompleted, Is.True);
+    }
+
+    [Test]
+    public void WhenOnNextThenCompleteThenSubscribeWhileReplayingLast()
+    {
+        var result = new List<int>();
+        bool isCompleted = false;
+
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookupReplayingLast(t => t % 4);
+        subject.OnNext(1);
+        subject.OnCompleted();
+
+        observableLookup[1].Subscribe(result.Add, () => isCompleted = true);
+
+        // ASSERT
+        Assert.That(result, Is.EqualTo(new[]{1}));
+        Assert.That(isCompleted, Is.True);
+    }
+
+    [Test]
+    public void METHOD()
+    {
+        var values = new ReplaySubject<int>();
+        values.OnNext(1);
+        values.OnCompleted();
+
+        var result = new List<int>();
+        values.TakeUntil(Observable.Return(1)).Subscribe(result.Add);
+    }
+
+    [Test]
+    public void WhenOnNextThenCompleteThenSubscribeForANewKey()
+    {
+        var result = new List<int>();
+        bool isCompleted = false;
+
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookup(t => t % 4);
+        subject.OnNext(1);
+        subject.OnCompleted();
+
+        observableLookup[0].Subscribe(result.Add, () => isCompleted = true);
+
+        // ASSERT
+        Assert.That(result, Is.Empty);
+        Assert.That(isCompleted, Is.True);
+    }
+
+    [Test]
+    public void WhenOnNextThenCompleteThenSubscribeForANewKeyWhileReplayingLast()
+    {
+        var result = new List<int>();
+        bool isCompleted = false;
+
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookupReplayingLast(t => t % 4);
+        subject.OnNext(1);
+        subject.OnCompleted();
+
+        observableLookup[0].Subscribe(result.Add, () => isCompleted = true);
+
+        // ASSERT
+        Assert.That(result, Is.Empty);
+        Assert.That(isCompleted, Is.True);
     }
 
     [Test]
     public void WhenWeDisposeTwice()
     {
-        var testScheduler = new TestScheduler();
+        var observableLookup = new Subject<int>().ToObservableLookup(t => t % 4);
+        observableLookup.Dispose();
+        observableLookup.Dispose();
 
-        var observableLookup = testScheduler.CreateHotObservable(ReactiveTest.OnNext(100, 1))
-            .ToObservableLookup(t => t % 4);
+        Assert.Pass("Disposing twice did not throw");
+    }
 
-        testScheduler.Schedule(TimeSpan.FromTicks(150), (_, _) =>
-        {
-            observableLookup.Dispose();
-            return Disposable.Empty;
-        });
+    [Test]
+    public void WhenWeDisposeTwiceWhileReplayingLast()
+    {
+        var observableLookupReplayingLast = new Subject<int>().ToObservableLookupReplayingLast(t => t % 4);
+        observableLookupReplayingLast.Dispose();
+        observableLookupReplayingLast.Dispose();
 
-        testScheduler.Schedule(TimeSpan.FromTicks(250), (_, _) =>
-        {
-            observableLookup.Dispose();
-            return Disposable.Empty;
-        });
-
-
-        // ACT
-        testScheduler.Start();
-        
         Assert.Pass("Disposing twice did not throw");
     }
 

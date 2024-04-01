@@ -93,6 +93,30 @@ public class ObservableLookupTests
     }
 
     [Test]
+    public void WhenWeMissTheFirstValueForKey()
+    {
+        var result = new List<int>();
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookup(t => t % 4);
+        subject.OnNext(1);
+        observableLookup[1].Subscribe(result.Add);
+        subject.OnNext(5);
+        Assert.That(result, Is.EqualTo(new[] { 5 }));
+    }
+
+    [Test]
+    public void WhenWeMissTheFirstValueForKeyWhileReplayingLast()
+    {
+        var result = new List<int>();
+        var subject = new Subject<int>();
+        var observableLookup = subject.ToObservableLookupReplayingLast(t => t % 4);
+        subject.OnNext(1);
+        observableLookup[1].Subscribe(result.Add);
+        subject.OnNext(5);
+        Assert.That(result, Is.EqualTo(new[] { 1, 5 }));
+    }
+
+    [Test]
     public void WhenMultipleOnNextThenSubscribeWhileReplayingLast()
     {
         var result = new List<int>();
@@ -190,17 +214,6 @@ public class ObservableLookupTests
         // ASSERT
         Assert.That(result, Is.EqualTo(new[]{1}));
         Assert.That(isCompleted, Is.True);
-    }
-
-    [Test]
-    public void METHOD()
-    {
-        var values = new ReplaySubject<int>();
-        values.OnNext(1);
-        values.OnCompleted();
-
-        var result = new List<int>();
-        values.TakeUntil(Observable.Return(1)).Subscribe(result.Add);
     }
 
     [Test]

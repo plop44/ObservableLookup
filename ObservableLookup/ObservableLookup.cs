@@ -40,7 +40,15 @@ public class ObservableLookup<TSource, TKey> : IDisposable where TKey : notnull
 
                 if (isReplayingLast)
                 {
-                    var connectableObservable = values.Replay(1);
+                    var replaySubject = new ReplaySubject<TSource>(1);
+                    var connectableObservable = values.Multicast(replaySubject);
+                    values = connectableObservable;
+                    completeObservable.Subscribe(_ => replaySubject.OnCompleted());
+                    connectableObservable.Connect();
+                }
+                else
+                {
+                    var connectableObservable = values.TakeUntil(completeObservable).Publish();
                     values = connectableObservable;
                     connectableObservable.Connect();
                 }
@@ -48,7 +56,7 @@ public class ObservableLookup<TSource, TKey> : IDisposable where TKey : notnull
                 return subscriptions.Select(action => (action, values));
             }))
             .Merge()
-            .Subscribe(t => t.action.Invoke(t.values.TakeUntil(completeObservable)));
+            .Subscribe(t => t.action.Invoke(t.values));
 
         _compositeDisposable.Add(subscription);
         _compositeDisposable.Add(inputConnectable.Connect());

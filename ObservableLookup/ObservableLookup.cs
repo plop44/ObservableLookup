@@ -25,13 +25,13 @@ public class ObservableLookup<TSource, TKey> : IDisposable where TKey : notnull
     internal ObservableLookup(IObservable<TSource> input, Func<TSource, TKey> keySelector, bool isReplayingLast = false)
     {
         var inputConnectable = input.Publish();
-        var sourceModified = inputConnectable.Select(t => new ValueOrAction(keySelector(t), t, default, true));
-        var subscriptionsModified = _subscriptions.Select(t => new ValueOrAction(t.Item1, default, t.Item2, false));
+        var inputAsValueOrActions = inputConnectable.Select(t => new ValueOrAction(keySelector(t), t, default, true));
+        var subscriptionsAsValueOrActions = _subscriptions.Select(t => new ValueOrAction(t.Item1, default, t.Item2, false));
 
         var completeObservable = inputConnectable.LastOrDefaultAsync();
 
-        var subscription = sourceModified
-            .Merge(subscriptionsModified)
+        var subscription = inputAsValueOrActions
+            .Merge(subscriptionsAsValueOrActions)
             .GroupBy(t => t.Key)
             .Select(t => t.Publish(t2 =>
             {

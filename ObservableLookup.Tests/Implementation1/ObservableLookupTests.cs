@@ -1,7 +1,8 @@
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using ObservableLookup.Implementation1;
 
-namespace ObservableLookup.Tests;
+namespace ObservableLookup.Tests.Implementation1;
 
 public class ObservableLookupTests
 {
@@ -212,7 +213,7 @@ public class ObservableLookupTests
         observableLookup[1].Subscribe(result.Add, () => isCompleted = true);
 
         // ASSERT
-        Assert.That(result, Is.EqualTo(new[]{1}));
+        Assert.That(result, Is.EqualTo(new[] { 1 }));
         Assert.That(isCompleted, Is.True);
     }
 
@@ -278,7 +279,10 @@ public class ObservableLookupTests
         var subject = new Subject<int>();
         var result = new List<int>();
 
-        var observableLookup = subject.ToObservableLookup(t => t % 10);
+        var observableLookup = subject
+            // synchronize is needed below otherwise we can have a concurrent access to GroupBy below in the case input is used from multiple threads.
+            .Synchronize()
+            .ToObservableLookup(t => t % 10);
 
         for (int i = 0; i < 10; i++)
         {
@@ -288,9 +292,9 @@ public class ObservableLookupTests
         // ACT
         Enumerable.Range(0, 10_000)
             .AsParallel().WithDegreeOfParallelism(6).ForAll(num =>
-        {
-            subject.OnNext(num);
-        });
+            {
+                subject.OnNext(num);
+            });
 
         Assert.That(result.OrderBy(t => t), Is.EquivalentTo(Enumerable.Range(0, 10_000).ToArray()));
     }
@@ -301,7 +305,10 @@ public class ObservableLookupTests
         var subject = new Subject<int>();
         var result = new List<int>();
 
-        var observableLookup = subject.ToObservableLookupReplayingLast(t => t % 10);
+        var observableLookup = subject
+            // synchronize is needed below otherwise we can have a concurrent access to GroupBy below in the case input is used from multiple threads.
+            .Synchronize()
+            .ToObservableLookupReplayingLast(t => t % 10);
 
         for (int i = 0; i < 10; i++)
         {
@@ -311,9 +318,9 @@ public class ObservableLookupTests
         // ACT
         Enumerable.Range(0, 10_000)
             .AsParallel().WithDegreeOfParallelism(6).ForAll(num =>
-        {
-            subject.OnNext(num);
-        });
+            {
+                subject.OnNext(num);
+            });
 
         Assert.That(result.OrderBy(t => t), Is.EquivalentTo(Enumerable.Range(0, 10_000).ToArray()));
     }
@@ -324,7 +331,10 @@ public class ObservableLookupTests
         var subject = new Subject<int>();
         var result = new List<int>();
 
-        var observableLookup = subject.ToObservableLookupReplayingLast(t => t % 10);
+        var observableLookup = subject
+            // synchronize is needed below otherwise we can have a concurrent access to GroupBy below in the case input is used from multiple threads.
+            .Synchronize()
+            .ToObservableLookupReplayingLast(t => t % 10);
 
         // ACT
         Enumerable.Range(0, 10_000)

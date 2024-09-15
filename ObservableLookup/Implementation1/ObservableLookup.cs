@@ -2,7 +2,7 @@
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 
-namespace ObservableLookup;
+namespace ObservableLookup.Implementation1;
 
 public static class ObservableLookupExtensions
 {

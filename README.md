@@ -2,7 +2,8 @@ ObservableLookup is an Rx operator to split an observable into GroupedObservable
 
 ### Example 1 - ToObservableLookup
 
-```var observable = Enumerable.Range(0, 30).ToObservable().Publish();
+```
+var observable = Enumerable.Range(0, 30).ToObservable().Publish();
 
 var observableLookup = observable.ToObservableLookup(t => t % 10);
 observableLookup[3].Materialize().Subscribe(Console.WriteLine);
